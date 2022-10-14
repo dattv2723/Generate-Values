@@ -2,7 +2,6 @@ import React from 'react'
 import styled from 'styled-components'
 
 const Checkbox = ({ label, name, value, changeValue }) => {
-  console.log(value)
   return (
     <Wrapper>
       {value ? (

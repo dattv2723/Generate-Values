@@ -7,6 +7,11 @@ import { FaClipboardCheck } from 'react-icons/fa'
 import { FiClipboard } from 'react-icons/fi'
 import { useDispatch } from 'react-redux'
 import { toggleModal } from './features/modalSlice'
+import {
+  DATE_DATA_TYPES,
+  NUMERIC_DATA_TYPES,
+  STRING_DATA_TYPES,
+} from './constants/constants'
 
 const initialState = {
   prefixString: 'Data_',
@@ -40,15 +45,8 @@ function App() {
   }
 
   const generateSQL = () => {
-    const {
-      prefixString,
-      defaultInt,
-      defaultBit,
-      defaultDecimal,
-      defaultDate,
-      input,
-      isWrap,
-    } = state
+    const { prefixString, defaultInt, defaultBit, defaultDate, input, isWrap } =
+      state
 
     if (
       !input ||
@@ -85,25 +83,17 @@ function App() {
     output += `\nVALUES \n(`
     let val
     arrVal.map((x) => {
-      if (x.includes('varchar')) {
+      if (STRING_DATA_TYPES.some((s) => x.includes(s))) {
         val = `${prefixString}${x.split(',')[0]}`
-
-        const maxLength = parseInt(x.split('(')[1].split(')')[0])
-        if (val.length > maxLength) val = val.substring(0, maxLength)
-
-        if (!x.includes('nvarchar')) {
-          val = truncateString(val, maxLength)
-        }
-        val = `'${val}'`
-      } else if (x.includes('int')) {
-        val = defaultInt
-      } else if (x.includes('bit')) {
-        val = defaultBit
-      } else if (x.includes('decimal')) {
-        val = defaultDecimal
-      } else if (x.includes('date')) {
+        val = `'${truncateString(val, x)}'`
+      } else if (NUMERIC_DATA_TYPES.some((n) => x.includes(n))) {
+        if (x.includes('bit')) val = defaultBit
+        else if (x.includes('decimal')) {
+          val = getValueDecimal(x)
+        } else val = defaultInt.toFixed(0)
+      } else if (DATE_DATA_TYPES.some((d) => x.includes(d))) {
         val = defaultDate
-      } else return
+      } else return true
 
       output += ` ${val}${breakLine},`
 
@@ -115,15 +105,48 @@ function App() {
     setState({ ...state, output: output, isCopy: false })
   }
 
-  const truncateString = (val, maxLength) => {
+  const truncateString = (val, template) => {
+    const maxLength = parseInt(template.split('(')[1]?.split(')')[0])
+    if (maxLength) {
+      if (val.length > maxLength) val = val.substring(0, maxLength)
+
+      if (!template.includes('nvarchar')) {
+        const maxSize = new Blob([randomString(maxLength)]).size
+        let sizeVal = new Blob([val]).size
+
+        while (maxSize < sizeVal) {
+          val = val.slice(0, -1)
+          sizeVal = new Blob([val]).size
+        }
+      }
+    }
+    return val
+  }
+
+  const getValueDecimal = (template) => {
+    const configLength = template.split('(')[1]?.split(')')[0]
+    const maxLength = Number(configLength.split(',')[0])
+    const decimalLength = Number(configLength.split(',')[1])
+    const defaultVal = state.defaultDecimal ?? 0
+
+    let integerPart = Math.trunc(defaultVal)
+    let decimalPart = defaultVal % integerPart
+
     const maxSize = new Blob([randomString(maxLength)]).size
+    let val = `${integerPart}`
     let sizeVal = new Blob([val]).size
 
     while (maxSize < sizeVal) {
       val = val.slice(0, -1)
       sizeVal = new Blob([val]).size
     }
-    return val
+
+    val = Number(val) + decimalPart
+
+    if (isNaN(val)) val = 0
+    console.log(val)
+
+    return val.toFixed(decimalLength)
   }
 
   const randomString = (length) => {
@@ -206,7 +229,7 @@ function App() {
         </div>
         <div className='row ml-auto'>
           <Checkbox
-            label='Wrap Text'
+            label='Break Line'
             name='isWrap'
             value={state.isWrap}
             changeValue={changeValue}
